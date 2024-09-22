@@ -289,14 +289,21 @@ uint32 FFFmpegEncodeThread::Run() {
 	};
 
 	// Loop while the status is in running or FrameTasks is not empty.
-	while (bRunning || !FrameTasks.IsEmpty()) {
-		// if FrameTasks queue is empty
-		if (FrameTasks.IsEmpty()) {
-			// sleep for 10/FPS seconds
-			FPlatformProcess::Sleep(10.0f / FrameRate);
+	while (true) {
+		{
+			// Wait for finish or enqueue to FrameTasks
+			std::unique_lock lk(FrameTasks_mutex);
+			EncodeThread_cv.wait(
+			    lk, [&]() { return !bRunning || !FrameTasks.IsEmpty(); });
+		}
 
-			// loop again
-			continue;
+		// if FrameTasks is empty
+		if (FrameTasks.IsEmpty()) {
+			// should be in the finish state.
+			check(!bRunning);
+
+			// finish
+			break;
 		}
 
 		// dequeue next frame task
@@ -354,4 +361,7 @@ uint32 FFFmpegEncodeThread::Run() {
 void FFFmpegEncodeThread::Stop() {
 	// stop running
 	bRunning = false;
+
+	// notify the encode thread to finish
+	EncodeThread_cv.notify_one();
 }

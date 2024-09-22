@@ -11,6 +11,7 @@
 #include "LogFFmpegEncoder.h"
 
 #include <atomic>
+#include <condition_variable>
 
 /**
  * Result type of UFFmpegEncoder::Open
@@ -160,6 +161,8 @@ private:
 	// single-producer, single-consumer
 	TQueue<TTask_Frame, EQueueMode::Spsc> FrameTasks;
 	std::atomic_bool                      bRunning = true;
+	std::mutex                            FrameTasks_mutex;
+	std::condition_variable               EncodeThread_cv;
 };
 
 #pragma region definition of template functions
@@ -217,6 +220,12 @@ void FFFmpegEncodeThread::AddFrame(
 
 	// increment FrameIndex
 	++FrameIndex;
+
+	// notify that a task has been enqueued to FrameTasks
+	{
+		std::lock_guard lk(FrameTasks_mutex);
+		EncodeThread_cv.notify_one();
+	}
 
 	return Success();
 }
