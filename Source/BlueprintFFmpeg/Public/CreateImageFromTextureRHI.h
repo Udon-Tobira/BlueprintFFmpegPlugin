@@ -18,8 +18,10 @@ template <typename FTextureRHIRef_T>
   requires std::is_same_v<FTextureRHIRef, std::remove_cvref_t<FTextureRHIRef_T>>
 UE::Tasks::TTask<FImage>
     CreateImageFromTextureRHIAsync(FTextureRHIRef_T&& TextureRHI) {
+	namespace Tasks = UE::Tasks;
+
 	// wait to ReadSurfaceData in GameThread
-#if true || WaitToReadsurfaceData
+#if false
 	// get description of source texture RHI
 	const auto& Desc = TextureRHI->GetDesc();
 
@@ -64,7 +66,7 @@ UE::Tasks::TTask<FImage>
 	FlushRenderingCommands();
 
 	// launch a task that convert TArray<FColor> to FImage
-	return UE::Tasks::Launch(
+	return Tasks::Launch(
 	    UE_SOURCE_LOCATION,
 	    [Color_Future = MoveTemp(Color_Future), Width, Height]() mutable {
 		    // get array of Color
@@ -85,8 +87,8 @@ UE::Tasks::TTask<FImage>
 	    },
 	    LowLevelTasks::ETaskPriority::BackgroundNormal);
 	// not wait to ReadSurfaceData in GameThread (wait in WorkerThread)
-#elif false || Asynchronously ReadsurfaceData
-	return UE::Tasks::Launch(
+#elif true
+	return Tasks::Launch(
 	    UE_SOURCE_LOCATION,
 	    [TextureRHI = Forward<FTextureRHIRef_T>(TextureRHI)]() mutable {
 		    // get description of source texture RHI
@@ -145,7 +147,9 @@ UE::Tasks::TTask<FImage>
 
 		    return OutImage;
 	    },
-	    LowLevelTasks::ETaskPriority::BackgroundNormal);
+	    LowLevelTasks::ETaskPriority::BackgroundNormal,
+	    Tasks::EExtendedTaskPriority::None,
+	    Tasks::ETaskFlags::DoNotRunInsideBusyWait);
 #endif
 }
 #pragma endregion
